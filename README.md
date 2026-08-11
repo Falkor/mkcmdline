@@ -1,23 +1,23 @@
 ![By Falkor](https://img.shields.io/badge/by-Falkor-blue.svg) [![github](https://img.shields.io/badge/git-github-lightgray.svg)](https://github.com/Falkor/mkcmdline) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENCE) [![Falkor/mkcmdline issues](https://img.shields.io/github/issues/Falkor/mkcmdline.svg)](https://github.com/Falkor/mkcmdline/issues)![GitHub Repo stars](https://img.shields.io/github/stars/:Falkor/:mkcmdline)
 
-	  _		_					 _	__					  _						 _ _ _
-	 | |   (_)_ __	_	___	 __ | |/ /___ _ __ _ __	  ___| |   ___ _ __ ___	  __| | (_)_ __	  ___
-	 | |   | | '_ \| | | \ \/ / | ' // _ \ '__| '_ \ / _ \ |  / __| '_ ` _ \ / _` | | | '_ \ / _ \
-	 | |___| | | | | |_| |>	 <	| . \  __/ |  | | | |  __/ | | (__| | | | | | (_| | | | | | |  __/
-	 |_____|_|_| |_|\__,_/_/\_\ |_|\_\___|_|  |_| |_|\___|_|  \___|_| |_| |_|\__,_|_|_|_| |_|\___|
-															 _
-							  __ _	___ _ __   ___ _ __ __ _| |_ ___  _ __
-							 / _` |/ _ \ '_ \ / _ \ '__/ _` | __/ _ \| '__|
-							| (_| |	 __/ | | |	__/ | | (_| | || (_) | |
-							 \__, |\___|_| |_|\___|_|  \__,_|\__\___/|_|
-							 |___/
-	 .			 Copyright (c) 2022-2026 Sebastien Varrette
+                       _     _                    _  __                    _
+                      | |   (_)_ __  _   ___  __ | |/ /___ _ __ _ __   ___| |
+                      | |   | | '_ \| | | \ \/ / | ' // _ \ '__| '_ \ / _ \ |
+                      | |___| | | | | |_| |>  <  | . \  __/ |  | | | |  __/ |
+                      |_____|_|_| |_|\__,_/_/\_\ |_|\_\___|_|  |_| |_|\___|_|
+                           _ _ _                                              _
+         ___ _ __ ___   __| | (_)_ __   ___    __ _  ___ _ __   ___ _ __ __ _| |_ ___  _ __
+        / __| '_ ` _ \ / _` | | | '_ \ / _ \  / _` |/ _ \ '_ \ / _ \ '__/ _` | __/ _ \| '__|
+       | (__| | | | | | (_| | | | | | |  __/ | (_| |  __/ | | |  __/ | | (_| | || (_) | |
+        \___|_| |_| |_|\__,_|_|_|_| |_|\___|  \__, |\___|_| |_|\___|_|  \__,_|\__\___/|_|
+                                              |___/
+       .			      Copyright (c) 2022-2026 Sebastien Varrette
 
-# Linux kernel's command-line parameters `cmdline` generator
+# Linux kernel's command-line parameters generator
 
 *  [Official Kernel's command-line parameters list](https://docs.kernel.org/admin-guide/kernel-parameters.html)
 
-This repository provides the resources needed to **converts splitted kernel cmdline configuration files `NN_*.cfg` into a valid `cmdline` file** (single line, appending all kernel parameters, excluding any comments) as expected from bootloaders such as [systemd-boot](https://systemd.io/BOOT/), `kernel-install` or UKI generators such as [`ukify`](https://www.freedesktop.org/software/systemd/man/latest/ukify.html).
+This repository provides the resources needed to **converts splitted kernel cmdline configuration files `NN_*.cfg` into a valid `cmdline` file** (single line, appending all kernel parameters, excluding any comments) as expected from bootloaders such as [systemd-boot](https://systemd.io/BOOT/), [`kernel-install`](https://www.man7.org/linux/man-pages/man8/kernel-install.8.html) or UKI generators such as [`ukify`](https://man7.org/linux/man-pages/man1/ukify.1.html).
 The supporting workflow is illustrated below:
 
 ```mermaid
@@ -33,9 +33,9 @@ flowchart TB
  k[[/etc/kernel/cmdline]]
  make ---> k
  k --> bl["Bootloader\nsystemd-boot"]
- k --> dracut["initramfs generator\ndracut"]
  k --> kinst["Kernel and initrd images\nkernel-install"]
  k --> uki["Unified Kernel Image (UKI) generator\n ukify"]
+ k --> dracut["initramfs generator\ndracut"]
 ```
 
 ## Motivations
@@ -79,7 +79,7 @@ cp 00_rootfs.cfg.example 00_rootfs.cfg
 $EDITOR 00_rootfs.cfg
 ```
 
-You will also need to install a descent diffing tool. [`wdiff`](https://www.gnu.org/software/wdiff/) should be preferred. You may also consider [delta](https://github.com/dandavison/delta).
+You will also need to install a descent diffing tool. [`wdiff`](https://www.gnu.org/software/wdiff/) should be preferred. You may also consider [`delta`](https://github.com/dandavison/delta).
 
 > The GNU wdiff program is a front end to diff for comparing files on a word per word basis.
 
@@ -180,7 +180,7 @@ For this reasons, you can keep all theses configurations under `grub.d/` and rel
 ./convert-grub-config -x
 ```
 
-_Note:_ if you want to keep track of the latest changes of the [grub configuration](https://github.com/Kicksecure/security-misc/tree/master/etc/default/grub.d) maintained by the [KickSecure security-misc](https://github.com/Kicksecure/security-misc) project, a dedicated script (under `grub.d/`) setup everything for you via `make setup-grub-config`. In details:
+_Note:_ if you want to keep track of the latest changes of the [grub configuration](https://github.com/Kicksecure/security-misc/tree/master/etc/default/grub.d) maintained by the [KickSecure security-misc](https://github.com/Kicksecure/security-misc) project, a dedicated script (under `grub.d/`) setup everything for you via `make setup-grub-config`, or if you prefer to do it manually:
 
 ```bash
 cd grub.d
