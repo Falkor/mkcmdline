@@ -1,0 +1,215 @@
+#! /usr/bin/env bash
+# Time-stamp: <Fri 2026-05-01 17:14 svarrette>
+################################################################################
+# mkcmdline - convert splitted cmdline configurations files (prefixed with
+# numbers) i.e. NN_<name>.cfg into a valid 'cmdline' file (as expected from
+# certain bootloader (as systemd-boot) or initramfs generator (as dracut), i.e.
+# a single line, appending all kernel parameters.
+#
+# Usage and more details: see mkcmdline -h
+################################################################################
+set -o errexit -o pipefail
+# set -x
+
+# cosmetics
+COLOR_BOLD="\033[1m"
+COLOR_VIOLET="\033[0;35m"
+COLOR_RED="\033[0;31m"
+COLOR_RESET="\033[0m"
+
+# Local variables
+RUNDIR="$(cd "$( dirname "BASH_SOURCE[0]" )" && pwd )"
+#TOP_DIR="$(  cd "$( dirname "BASH_SOURCE[0]" )" && git rev-parse --show-toplevel)"
+CMD_PREFIX="echo"
+DO_CHECK_PARAMS=yes
+
+### Handle (naive) sanitizing options for
+# Reference list of kernel parameters: https://github.com/torvalds/linux/blob/master/Documentation/admin-guide/kernel-parameters.txt
+KERNEL_PARAMETERS_TXT_URL="https://raw.githubusercontent.com/torvalds/linux/refs/heads/master/Documentation/admin-guide/kernel-parameters.txt"
+KERNEL_PARAMETERS_TXT=$(basename "${KERNEL_PARAMETERS_TXT_URL}")
+
+# ensure the 'root' parameters is set
+HAS_ROOT_PARAM=
+
+# Final file to generate
+CMDLINE=cmdline
+# Directory hosting the cfg files (cmdline.d)
+CMDLINE_D_DIR="."
+# list of source [0-9]*.cfg files
+CFG_FILES=
+
+
+
+################################################################################
+info()    { echo -e "${COLOR_BOLD}[+] $*${COLOR_RESET}"; }
+error()   { echo -e "${COLOR_RED}*** ERROR *** $*${COLOR_RESET}"; }
+warning() { echo -e "${COLOR_VIOLET}/!\ WARNING:${COLOR_RESET} $*"; }
+print_error_and_exit() { error "$*"; exit 1; }
+usage() {
+  cat <<EOF
+$(basename "$0"): convert splitted cmdline configurations files NN*.cfg into a
+  valid ${CMDLINE} file (single line, appending all kernel parameters) as
+  expected from bootloaders such as systemd-boot.
+
+  In practice, the following actions are performed:
+  - ensure you have [0-9]*.cfg file(s) as sources
+  - if needed, fetch kernel parameters reference list from linux kernel
+    documentation as ${KERNEL_PARAMETERS_TXT}
+  - extract all tokens from <N>*.cfg files and:
+    1. check the validity of the proposed kernel parameters. In case they
+       are not found in ${KERNEL_PARAMETERS_TXT}, this is indicated (it may
+       be a normal situation, typically for specific modules/drivers options)
+    2. prepare the final cmdline aggregating these token sorted as follows:
+       - parameters from 0_*.cfg are placed first untouched (since they
+         holds rootfs identification and it's the first information you want
+       - rest of the parameters are alphabetically sorted (to facilitate
+         later the search for a given parameter with a [long] [/proc/]cmdline)
+  - generating cmdline file (default: ${CMDLINE})
+  - displaying (when applicable) difference(s) with the current
+    /etc/kernel/cmdline
+
+USAGE
+  $(basename "$0") [-c] [-x] [-d DIR] [-o FILE]
+
+OPTIONS:
+  -c --check     Check validity of the parsed kernel parameters against the
+                 reference list ${KERNEL_PARAMETERS_TXT}, as fetched from
+                 torvald/linux repository.
+                 see Documentation/admin-guide/kernel-parameters.txt
+                 While naive, this approach proved to be useful to detect
+                 mispellings before rebooting.
+                 Enabled by default.
+                 Note: unless wrong, there is no official linting program
+                 for kernel parameters...
+  -d --dir DIR   Set location of cmdline.d directory hosting the [0-9]*.cfg
+                 files. Default: '${CMDLINE_D_DIR}' (or script directory
+                 ${SCRIPTDIR} if no *.cfg are found under ${CMDLINE_D_DIR})
+  -n --dry-run   Dry run mode (**DEFAULT** mode): echo the commands to be run
+  --no-check     DO NOT check validity of the kernel parameters
+  -o FILE        set the output file. Default: ${CMDLINE}
+  -x --exec      Really execute the commands, i.e. don't just echo them
+
+EXAMPLES
+  Generate ${CMDLINE} from [0-9]*.cfg in ther curent directory:
+    $(basename "$0")    # Dry-run: show commands to be executed
+    $(basename "$0") -x # => ${CMDLINE}
+
+  Update /etc/kernel/cmdline:
+    sudo $(basename "$0") -d /etc/kernel/cmdline.d -o /etc/kernel/cmdline    # Dry-run
+    sudo $(basename "$0") -d /etc/kernel/cmdline.d -o /etc/kernel/cmdline -x
+EOF
+}
+###
+# print warning when running in echo mode (default behaviour)
+##
+warning_dry_run() {
+  if [ -n "${CMD_PREFIX}" ]; then
+    echo ""
+    warning "DRY-RUN MODE!!! Suffix with '-x' to REALLY execute the commands, i.e. use:"
+    warning "   $0 [...] -x"
+    exit 0
+  fi
+}
+
+################################################################################
+#[ $UID -gt 0 ] && print_error_and_exit "You must be root to execute this script (current uid: $UID)"
+[[ "$*" =~ [[:space:]]"-x" ]] && CMD_PREFIX=
+# Check for options
+while [ $# -ge 1 ]; do
+  case $1 in
+    -c | --check)   DO_CHECK_PARAMS="$1";;
+    -d | --dir | --cfg-dir)
+      shift; CMDLINE_D_DIR="$1";;
+    -h | --help)    usage; exit 0;;
+    -n | --dry-run) CMD_PREFIX="echo" ;;
+    --no-check)     DO_CHECK_PARAMS="";;
+    -o | --output)  shift; CMDLINE="$1";;
+    -x | --exec)    CMD_PREFIX= ;;
+    *) print_error_and_exit "Bad format - '$(basename "$0") -h' for usage";
+  esac
+  shift
+done
+
+# safeguard
+[ -z "${CMDLINE_D_DIR}" ]   && print_error_and_exit "Empty cmdline.d directory"
+# trying to guess the cmdline.d directory (searching for[0-9]*.cfg files)from CMDLINE_D_DIR or script directory
+for d in \
+  "${CMDLINE_D_DIR}" \
+    $(dirname "$0") \
+    $(dirname "$(readlink -f "$0")") \
+  ; \
+  do
+    # echo "=> testing ${d}"
+    # bash-specific built-in command (but way more efficient)
+    CFG_FILES=$(compgen -G "${d}/[[:digit:]]*.cfg" || true)
+    if [ -n "${CFG_FILES}" ]; then
+      echo "    directory '$(realpath -s --relative-to="${RUNDIR}" "${d}")' holds valid [0-9]*.cfg files => operating from this directory"
+      CMDLINE_D_DIR="${d}"
+      break
+    fi
+done
+
+[ ! -d "${CMDLINE_D_DIR}" ] && print_error_and_exit "bad cmdline.d source '${CMDLINE_D_DIR}'(not a directory)"
+[ -z "${CFG_FILES}" ] && print_error_and_exit "Unable to find [0-9]*.cfg files under '${CMDLINE_D_DIR}'. Adapt $(basename "$0") -d [...]"
+
+info "chdir ${CMDLINE_D_DIR}"
+cd "${CMDLINE_D_DIR}" || print_error_and_exit "cannot 'cd ${CMDLINE_D_DIR}'"
+
+# exit 0
+
+# fetch kernel parameters reference list from linux kernel documentation
+if [ ! -f "${KERNEL_PARAMETERS_TXT}" ]; then
+  info "fetching reference kernel parameters list as ${KERNEL_PARAMETERS_TXT}"
+  $CMD_PREFIX curl "${KERNEL_PARAMETERS_TXT_URL}" -o "${CMDLINE_D_DIR}/${KERNEL_PARAMETERS_TXT}"
+  echo
+fi
+
+# check proposed kernel parameter
+if [ -n "${DO_CHECK_PARAMS}" ] && [ -f "${KERNEL_PARAMETERS_TXT}" ]; then
+  info "checking kernel parameter validity against reference list '${KERNEL_PARAMETERS_TXT}'"
+  # tokenizing
+  for token in $(grep -v '\s*\#' --no-filename [[:digit:]]*.cfg); do
+    param=$(echo "${token}" | cut -d '=' -f 1)
+    # echo -n "    - kernel parameter '${param}': "
+    if [ -n "${CMD_PREFIX}" ]; then
+      echo "sed -n '/^\t[a-z]/p' ${KERNEL_PARAMETERS_TXT} | grep -c [...]"
+      break
+    fi
+    if [ "$(sed -n '/^\t[a-z]/p' "${KERNEL_PARAMETERS_TXT}" | grep -c "${param}")" -eq 0 ]; then
+      printf "%30s ${COLOR_RED}NOT FOUND${COLOR_RESET}\n" "'${param}'"
+    fi
+    [ "${param}" == 'root' ] && HAS_ROOT_PARAM="${param}"
+  done
+  if [ -z "${CMD_PREFIX}" ]; then
+    [ -z "${HAS_ROOT_PARAM}" ] && print_error_and_exit "No root= parameter in your cmdline !"
+  fi
+fi
+echo
+
+# generating cmdline file
+info "generating output file '${CMDLINE}'"
+filename="${CMDLINE}"
+[ -n "${CMD_PREFIX}" ] && filename="/dev/null"
+# special treatment for 0_*.cfg placed first (typically holds rootfs identification etc.
+grep -v '\s*\#' --no-filename 0*.cfg | awk '{print}' ORS=' ' | sed 's/^\s*//g'  | tee "${filename}"
+# now for all other files: sort the options
+grep -v '\s*\#' --no-filename [1-9]*.cfg | sed 's/^\s+//g' | sort | awk '{print}' ORS=' ' | sed 's/^\s*//g' | tee -a "${filename}"
+echo
+echo
+
+
+# Default diff program
+diff="diff"
+[ -x "$(command -v colordiff 2>/dev/null)" ] && diff="colordiff"
+[ -x "$(command -v delta     2>/dev/null)" ] && diff="delta"
+[ -x "$(command -v wdiff     2>/dev/null)" ] && diff="wdiff -3 -s"
+
+# displaying (when applicable) difference(s) with the current /etc/kernel/cmdline
+if [ "${CMDLINE}" != "/etc/kernel/cmdline" ]; then
+  info "checking difference with /etc/kernel/cmdline"
+  $CMD_PREFIX ${diff} /etc/kernel/cmdline "${CMDLINE}" || true
+fi
+
+echo ""
+echo ""
+warning_dry_run

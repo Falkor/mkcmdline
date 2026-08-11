@@ -1,0 +1,112 @@
+#! /usr/bin/env bash
+# Time-stamp: <Wed 2026-04-08 17:02 svarrette>
+################################################################################
+# convert-grub-config: convert/sanitize grub configs listed under
+# grud.d/<N>_*.cfg to make them usable under other bootloader as systemd-boot.
+# The idea remains to keep the comments in the configuration as they illustrate
+# the choices made (as done in KickSecure grub file for instance).
+#
+# As a consequence, the converted files cannot be used directly since
+# systemd-boot and more generally UKI (Unified Kernel Images) expect a *single
+# line* cmdline.
+# This can be obtained from the converted (commented) *.cfg file with the
+# following command (see also the 'mkcmdline' script):
+#
+#  grep -v '\s*\#' --no-filename [[:digit:]]*.cfg | awk '{print}' ORS=' ' | tee cmdline
+#
+# Usage: convert-grub-config
+################################################################################
+# set -o nounset -o errexit -o pipefail
+set -o errexit -o pipefail
+#set -x
+
+#SCRIPTDIR="$(cd "$( dirname "BASH_SOURCE[0]" )" && pwd )"
+#TOP_DIR="$(  cd "$( dirname "BASH_SOURCE[0]" )" && git rev-parse --show-toplevel)"
+CMD_PREFIX="echo"
+FORCE=
+OPTS=
+INFILE=
+
+# cosmetics
+COLOR_BOLD="\033[1m"
+COLOR_RESET="\033[0m"
+
+GRUB_D="grub.d"
+
+################################################################################
+info()    { echo -e "${COLOR_BOLD}[+] $*${COLOR_RESET}"; }
+error()   { echo -e "${COLOR_BOLD}*** ERROR *** $*${COLOR_RESET}"; }
+warning() { echo -e "/!\ WARNING: $*"; }
+print_error_and_exit() { error "$*"; exit 1; }
+usage() {
+  cat <<EOF
+$(basename "$0"): convert/sanitize grub configs listed under ${GRUB_D}/<N>_*.cfg
+to make them usable under other bootloader as systemd-boot.
+The idea remains to keep the comments in the configuration as they illustrate
+the choices made (as done in KickSecure grub file for instance).
+
+As a consequence, the converted files cannot be used directly since systemd-boot
+and more generally UKI (Unified Kernel Images) expect a *single line* cmdline.
+That's the purpose of the mkcmdline script
+
+USAGE
+  $(basename "$0") [-f] [-x]
+
+OPTIONS:
+  -f --force      Force mode: overwrite existing files
+  -n --dry-run    Dry run mode (**DEFAULT** mode): echo the commands to be run
+  -x --exec       Really execute the commands, i.e. don't just echo them
+
+EXAMPLE
+  To convert ${GRUB_D}/<N>_*.cfg under the current directory:
+  $(basename "$0")    # Dry-run: show commands to be executed
+  $(basename "$0") -x
+EOF
+}
+################################################################################
+
+convert() {
+  local infile="$1"
+
+}
+
+################################################################################
+#[ $UID -gt 0 ] && print_error_and_exit "You must be root to execute this script (current uid: $UID)"
+[[ "$*" =~ [[:space:]]"-x" ]] && CMD_PREFIX=
+# Check for options
+while [ $# -ge 1 ]; do
+  case $1 in
+    -h | --help) usage; exit 0;;
+    -i | --input) shift; INFILE="$1";;
+    -n | --dry-run) CMD_PREFIX="echo" ;;
+    -x | --exec)    CMD_PREFIX= ;;
+    *) OPTS="$*"; break;;
+  esac
+  shift
+done
+
+# Prepare grub.d directory with the different resources to convert
+info "setup (if needed) ${GRUB_D}"
+$CMD_PREFIX mkdir -p "${GRUB_D}"
+
+
+# Safeguards
+[ ! -d "${GRUB_D}" ] && print_error_and_exit "Unexisting directory for grub configuration '${GRUB_D}'"
+if [ -n "${INFILE}" ]; then
+  [ ! -f "${INFILE}" ] && print_error_and_exit "Unexisting file '${INFILE}'"
+fi
+
+
+for f in $(ls "${GRUB_D}/" | grep -E '^[0-9]+.*\.cfg'); do
+  info "convert ${GRUB_D}/${f} => ${f}"
+  filename="${f}"
+  [ -n "${CMD_PREFIX}" ] && filename="/dev/null"
+  $CMD_PREFIX cat "${GRUB_D}/${f}" | \
+    sed "s/GRUB_CMDLINE_LINUX=\"\$GRUB_CMDLINE_LINUX \(.*\)\"/\1/g" | \
+    sed "s/GRUB_CMDLINE_LINUX_DEFAULT=\"\$GRUB_CMDLINE_LINUX_DEFAULT \(.*\)\"/\1/g" | \
+    grep -v -E 'kpkg|kver' | \
+    tee "${filename}"
+  # Kept for archiving: initial way of collecting the cmdline
+  # ( . "${GRUB_D}/${f}" && \
+  #     echo "$GRUB_CMDLINE_LINUX" | tee -a "${dst}" )
+done

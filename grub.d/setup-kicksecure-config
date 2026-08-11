@@ -1,0 +1,111 @@
+#! /usr/bin/env bash
+# Time-stamp: <Sun 2026-04-12 16:35 svarrette>
+################################################################################
+# setup-kicksecure-config: setup symlinks to KickSecure security misc grub
+# configuration and (if needed) generated updated headers for the files, making
+# them ready for export
+
+# Usage: setup-kicksecure-config -h
+################################################################################
+# set -o nounset -o errexit -o pipefail
+set -o errexit -o pipefail
+#set -x
+
+#SCRIPTDIR="$(cd "$( dirname "BASH_SOURCE[0]" )" && pwd )"
+#TOP_DIR="$(  cd "$( dirname "BASH_SOURCE[0]" )" && git rev-parse --show-toplevel)"
+CMD_PREFIX="echo"
+FORCE=
+OPTS=
+
+# cosmetics
+COLOR_BOLD="\033[1m"
+COLOR_RESET="\033[0m"
+
+KICKSECURE_SECURITY_MISC_DIR="/usr/local/src/git/Kicksecure/security-misc"
+KICKSECURE_SECURITY_MISC_URL="https://github.com/Kicksecure/security-misc.git"
+
+################################################################################
+info()    { echo -e "\n${COLOR_BOLD}[+] $*${COLOR_RESET}"; }
+error()   { echo -e "${COLOR_BOLD}*** ERROR *** $*${COLOR_RESET}"; }
+warning() { echo -e "/!\ WARNING: $*"; }
+print_error_and_exit() { error "$*"; exit 1; }
+usage() {
+  cat <<EOF
+$(basename "$0"): setup symlinks to KickSecure security misc grub
+configuration and (if needed) generated updated headers for the files, making
+them ready for export.
+outputs:
+  - kicksecure-*.cfg : symlinks to interesting grub configs
+  - *.cfg: sanitized
+
+
+USAGE
+  $(basename "$0") [-f] [-x]
+
+OPTIONS:
+  -f --force      Force mode: overwrite existing files
+  -n --dry-run    Dry run mode (**DEFAULT** mode): echo the commands to be run
+  -x --exec       Really execute the commands, i.e. don't just echo them
+
+EXAMPLE
+  $(basename "$0")    # Dry-run: show commands to be executed
+  $(basename "$0") -x
+EOF
+}
+################################################################################
+
+################################################################################
+#[ $UID -gt 0 ] && print_error_and_exit "You must be root to execute this script (current uid: $UID)"
+[[ "$*" =~ [[:space:]]"-x" ]] && CMD_PREFIX=
+# Check for options
+while [ $# -ge 1 ]; do
+  case $1 in
+    -h | --help) usage; exit 0;;
+    -n | --dry-run) CMD_PREFIX="echo" ;;
+    -x | --exec)    CMD_PREFIX= ;;
+    *) OPTS="$*"; break;;
+  esac
+  shift
+done
+
+info "initiating/updating ${KICKSECURE_SECURITY_MISC_DIR}"
+if [ ! -d "${KICKSECURE_SECURITY_MISC_DIR}" ]; then
+  $CMD_PREFIX git clone "${KICKSECURE_SECURITY_MISC_URL}" "${KICKSECURE_SECURITY_MISC_DIR}"
+else
+  $CMD_PREFIX git -C "${KICKSECURE_SECURITY_MISC_DIR}" pull origin
+fi
+
+# symlink interesting grub configs
+info "setup interesting KickSecure grub configs"
+if [ ! -h "security-misc.d" ]; then
+  $CMD_PREFIX ln -s "${KICKSECURE_SECURITY_MISC_DIR}/etc/default/grub.d" "security-misc.d"
+fi
+for f in \
+  "40_cpu_mitigations.cfg#security-misc-shared" \
+   "40_kernel_hardening.cfg#security-misc-shared" \
+   "40_signed_modules.cfg#security-misc-shared"
+do
+  dst=$(echo "${f}" | sed 's/\#.*$//')
+  kicksecure_filename="kicksecure-${dst}"
+  if [ ! -h "${kicksecure_filename}" ]; then
+    $CMD_PREFIX ln -s "security-misc.d/$(basename $f)" "${kicksecure_filename}"
+  fi
+  if [ ! -f "${f}" ]; then
+    info "adapt kicksecure grub config '${kicksecure_filename}' to generate ${f}"
+    filename="${dst}"
+    [ -n "${CMD_PREFIX}" ] && filename="/dev/null"
+    # header
+    cat << EOF | tee "${filename}"
+#############################################################################################
+# ${dst}
+# Adapted from the following resources:
+# - Linux Kernel Self-Protection Project (KSPP): https://kspp.github.io/Recommended_Settings
+# - Kicksecure security-misc: ${KICKSECURE_SECURITY_MISC_URL}
+# Linux kernel's command-line parameters list
+#              https://docs.kernel.org/admin-guide/kernel-parameters.html
+#############################################################################################
+#
+EOF
+    $CMD_PREFIX tail -n+4 "${kicksecure_filename}" | tee -a "${filename}"
+  fi
+done

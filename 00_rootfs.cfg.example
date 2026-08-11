@@ -1,0 +1,35 @@
+#############################################################################################
+# 00_rootfs.cfg
+# Most important kernel parameters to identify the root filesystem (root*=), and
+# the partition device for software suspend (resume).
+# /!\ IMPORTANT: this file is gitignored **on purpose** to avoid exposing system details but
+#     you MUST configure one!
+#
+# Linux kernel's command-line parameters list
+#              https://docs.kernel.org/admin-guide/kernel-parameters.html
+#############################################################################################
+#
+# ALWAYS prefer to identify [mapped] partitions from their UUID
+#    sudo lsblk -f
+#
+# and implement Discoverable Partition Specification (DPS) on your system
+# see https://uapi-group.org/specifications/specs/discoverable_partitions_specification/
+
+## Root filesystem (here a BTRFS subvolume based) and root filesystem mount option string
+root=UUID=XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
+
+# allow to FIX: fuseblk: Unknown parameter 'subvol' 
+#rootfstype=btrfs
+#rootflags=subvol=@   # complementary flags. Ex: BTRFS subvolume
+
+## partition device for software suspend
+resume=UUID=XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
+
+## BTRFS based swapfile - resume offset
+## https://btrfs.readthedocs.io/en/latest/ch-swapfile.html#hibernation
+## Obtained by:
+##       sudo btrfs inspect-internal map-swapfile -r /swap/swapfile
+# resume_offset=NNNNNNN
+
+## Disable zram-generator
+# systemd.zram=0
