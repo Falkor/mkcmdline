@@ -1,4 +1,4 @@
-![By Falkor](https://img.shields.io/badge/by-Falkor-blue.svg) [![github](https://img.shields.io/badge/git-github-lightgray.svg)](https://github.com/Falkor/mkcmdline) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENCE) [![Falkor/mkcmdline issues](https://img.shields.io/github/issues/Falkor/mkcmdline.svg)](https://github.com/Falkor/mkcmdline/issues)![GitHub Repo stars](https://img.shields.io/github/stars/:Falkor/:mkcmdline)
+![By Falkor](https://img.shields.io/badge/by-Falkor-blue.svg) [![github](https://img.shields.io/badge/git-github-lightgray.svg)](https://github.com/Falkor/mkcmdline) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENCE) [![Falkor/mkcmdline issues](https://img.shields.io/github/issues/Falkor/mkcmdline.svg)](https://github.com/Falkor/mkcmdline/issues)![GitHub Repo stars](https://img.shields.io/github/stars/Falkor/mkcmdline)
 
                        _     _                    _  __                    _
                       | |   (_)_ __  _   ___  __ | |/ /___ _ __ _ __   ___| |
