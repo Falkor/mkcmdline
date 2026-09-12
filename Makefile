@@ -1,4 +1,4 @@
-# Time-stamp: <Tue 2026-08-11 23:44 svarrette>
+# Time-stamp: <Sat 2026-09-12 12:00 svarrette>
 ####################################################################################
 # Makefile (configuration file for GNU make - see http://www.gnu.org/software/make/)
 #                     __  __       _         __ _ _
@@ -30,9 +30,9 @@ CONVERT_GRUB_CONFIG = convert-grub-config
 
 ##################### Main targets #####################
 TARGETS = local
-SETUP_TARGETS = setup-grub-config
+SETUP_TARGETS =
 CLEAN_TARGETS = clean-cmdline
-INFO_TARGETS  = info-make info-cmdline
+INFO_TARGETS  = info-cmdline
 
 # local hook, meant to be git ignored...
 ifneq ("$(wildcard .Makefile.custom)","")
