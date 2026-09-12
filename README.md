@@ -15,9 +15,13 @@
 
 # Linux kernel's command-line parameters generator
 
-*  [Official Kernel's command-line parameters list](https://docs.kernel.org/admin-guide/kernel-parameters.html)
+* [Official Kernel's command-line parameters list](https://docs.kernel.org/admin-guide/kernel-parameters.html)
+* [Linux Kernel Self-Protection Project (KSPP)](https://kspp.github.io/Recommended_Settings)
+* [`sysctl` admin guide](https://www.kernel.org/doc/html/latest/admin-guide/sysctl/)
 
 This repository provides the resources needed to **converts splitted kernel cmdline configuration files `NN_*.cfg` into a valid `cmdline` file** (single line, appending all kernel parameters, excluding any comments) as expected from bootloaders such as [systemd-boot](https://systemd.io/BOOT/), [`kernel-install`](https://www.man7.org/linux/man-pages/man8/kernel-install.8.html) or UKI generators such as [`ukify`](https://man7.org/linux/man-pages/man1/ukify.1.html).
+The provided configurations `*.cfg` are expected to provide hardened settings for your kernel `cmdline`.
+This repository also holds hardened `sysctl` configurations (for _runtime_ kernel parameters) under `sysctl.d/*.conf`.
 The supporting workflow is illustrated below:
 
 ```mermaid
@@ -27,18 +31,25 @@ flowchart TB
      rootfs[["00_rootfs.cfg\n(git ignored)\n rootfs settings"]]
      cfg@{ shape: docs, label: "NN_TOPIC.cfg"}
      script((("mkcmdline\nmake"))) --> out[[cmdline]] --> make((("mkcmkline -o [...]\nmake kernel-cmdline")))
+     deploy((("make sysctl")))
      rootfs  --> script
      cfg   --> script
  end
  k[[/etc/kernel/cmdline]]
+ subgraph sysctl.d/
+   sysctl@{ shape: docs, label: "NN_TOPIC.conf"}
+   sysctl --> deploy
+ end
+ sysctl_d[["/usr/local/lib/sysctl.d/*.conf\nRuntime kernel parameters"]]
  make ---> k
+ deploy --> sysctl_d
  k --> bl["Bootloader\nsystemd-boot"]
  k --> kinst["Kernel and initrd images\nkernel-install"]
  k --> uki["Unified Kernel Image (UKI) generator\n ukify"]
  k --> dracut["initramfs generator\ndracut"]
 ```
 
-## Motivations
+## Motivations: `cmdline.d/*.cfg` $\Rightarrow$ `cmdline`
 
 This repository holds _splitted_ commented configurations for the kernel `cmdline` parameters (so what should have been the content of `/etc/kernel/cmdline.d`) and resources to generate out of them a single line `cmdline` file aggregating in a single line all theses parameters, without comments.
 
@@ -92,11 +103,12 @@ sudo apt install wdiff colordiff
 
 Only applicable when within the current `cmdline.d` directory.
 
-| **Directive** | **Description**                                        | **Alias(es)** `make [...]`   |
-| :---------:   | :-------------------------                             | :--------------------------- |
-| `make`        | Locally generate `cmdline`                             | `make local`                  |
+| **Directive** | **Description**                                        | **Alias(es)** `make [...]`           |
+| :---------:   | :-------------------------                             | :---------------------------         |
+|    `make`     | Locally generate `cmdline`                             | `make local`                         |
 | `make system` | Generate `/etc/kernel/cmdline`                         | `make sync` or `make kernel-cmdline` |
-| `make uki`    | [re]generate UKI / kernel to integrate the new cmdline | `make kernel-install`        |
+| `make sysctl` | Deploy sysctl configuration under `sysctl.d`           |                                      |
+|  `make uki`   | [re]generate UKI / kernel to integrate the new cmdline | `make kernel-install`                |
 
 See also `make help` for all available directives
 
@@ -181,14 +193,32 @@ For this reasons, you can keep all theses configurations under `grub.d/` and rel
 ./convert-grub-config -x
 ```
 
-_Note:_ if you want to keep track of the latest changes of the [grub configuration](https://github.com/Kicksecure/security-misc/tree/master/etc/default/grub.d) maintained by the [KickSecure security-misc](https://github.com/Kicksecure/security-misc) project, a dedicated script (under `grub.d/`) setup everything for you via `make setup-grub-config`, or if you prefer to do it manually:
+_Note:_ if you want to keep track of the latest changes of the [grub configuration](https://github.com/Kicksecure/security-misc/tree/master/etc/default/grub.d) maintained by the [KickSecure security-misc](https://github.com/Kicksecure/security-misc) project, a dedicated script (under `grub.d/`) setup everything.
 
 ```bash
-cd grub.d
-./setup-kicksecure-config -h
-./setup-kicksecure-config    # Dry-run: show commands to be executed
-./setup-kicksecure-config -x
+make setup-grub-config
+# Manually:
+#  cd grub.d
+#  ./setup-kicksecure-config -h
+#  ./setup-kicksecure-config    # Dry-run: show commands to be executed
+#  ./setup-kicksecure-config -x
 ```
+
+## Runtime kernel parameters `sysctl.d/`
+
+See `sysctl.d/*.conf*`
+You can deploy the proposed configurations under `/usr/local/lib/sysctl.d/` by running:
+
+```bash
+make sysctl
+# Alternative:
+#  cd sysctl.d
+#  make
+```
+
+## Kernel-hardening-checker
+
+You may wish to review the security hardening options of your Linux kernel (including the configurations proposed in this repository) with the [`a13xp0p0v/kernel-hardening-checker`](https://github.com/a13xp0p0v/kernel-hardening-checker).
 
 ## Issues / Feature request
 

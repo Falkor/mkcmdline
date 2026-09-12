@@ -1,4 +1,4 @@
-# Time-stamp: <Sat 2026-09-12 12:00 svarrette>
+# Time-stamp: <Sat 2026-09-12 16:42 svarrette>
 ####################################################################################
 # Makefile (configuration file for GNU make - see http://www.gnu.org/software/make/)
 #                     __  __       _         __ _ _
@@ -24,6 +24,7 @@ KERNEL_DIR ?= /etc/kernel
 CMDLINE    ?= cmdline
 CMDLINE_D  ?= cmdline.d
 GRUB_D     ?= grub.d
+SYSCTL_D   ?= sysctl.d
 # generator script
 MKCMDLINE   = mkcmdline
 CONVERT_GRUB_CONFIG = convert-grub-config
@@ -55,11 +56,12 @@ include .Makefile.git
 INFO_TARGETS  += info-git info-version
 endif
 
-
-### Specific setup; grub configs
-.PHONY: setup-grub-config
+### Specific setup; grub  and sysctl configs
+.PHONY: setup-grub-config setup-sysctl-config
 setup-grub-config:
 	$(MAKE) -C $(GRUB_D) setup
+setup-sysctl-config:
+	$(MAKE) -C $(SYSCTL_D) setup
 
 ### local generation
 .PHONY: local
@@ -84,6 +86,11 @@ uki kernel-install: kernel-cmdline
 # 	@echo => convert grub configs under $(GRUB_D)/ in the current directory
 # 	./$(CONVERT_GRUB_CONFIG) -x
 
+### sysctl.d (runtime kernel configuration) deployment
+.PHONY: sysctl
+sysctl:
+	make -C $(SYSCTL_D)
+
 ### cleanup
 .PHONY: clean-cmdline
 clean-cmdline:
@@ -96,6 +103,7 @@ info-cmdline:
 	@echo "KERNEL_DIR = $(KERNEL_DIR)"
 	@echo "CMDLINE    = $(CMDLINE)"
 	@echo "MKCMDLINE  = $(MKCMDLINE)"
+	@echo "SYSCTL_D   = $(SYSCTL_D)"
 
 ###################################
 .PHONY: setup clean info

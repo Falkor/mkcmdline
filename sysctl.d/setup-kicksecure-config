@@ -1,0 +1,115 @@
+#! /usr/bin/env bash
+# Time-stamp: <Sat 2026-09-12 15:29 svarrette>
+################################################################################
+# setup-kicksecure-config: setup symlinks to KickSecure security-misc sysctl.dirname
+# configuration
+# Usage: setup-kicksecure-config -h
+################################################################################
+# set -o nounset -o errexit -o pipefail
+set -o errexit -o pipefail
+#set -x
+
+#SCRIPTDIR="$(cd "$( dirname "BASH_SOURCE[0]" )" && pwd )"
+#TOP_DIR="$(  cd "$( dirname "BASH_SOURCE[0]" )" && git rev-parse --show-toplevel)"
+CMD_PREFIX="echo"
+FORCE=
+OPTS=
+
+# cosmetics
+COLOR_BOLD="\033[1m"
+COLOR_RESET="\033[0m"
+
+KICKSECURE_SECURITY_MISC_DIR="/usr/local/src/git/Kicksecure/security-misc"
+KICKSECURE_SECURITY_MISC_URL="https://github.com/Kicksecure/security-misc.git"
+
+################################################################################
+info() { echo -e "\n${COLOR_BOLD}[+] $*${COLOR_RESET}"; }
+error() { echo -e "${COLOR_BOLD}*** ERROR *** $*${COLOR_RESET}"; }
+warning() { echo -e "/!\ WARNING: $*"; }
+print_error_and_exit() {
+  error "$*"
+  exit 1
+}
+usage() {
+  cat <<EOF
+$(basename "$0"): setup symlinks to KickSecure security-misc sysctl.d
+configuration
+outputs:
+  - kicksecure-*.cfg : symlinks to interesting sysctl configs
+
+USAGE
+  $(basename "$0") [-f] [-x]
+
+OPTIONS:
+  -f --force      Force mode: overwrite existing files
+  -n --dry-run    Dry run mode (**DEFAULT** mode): echo the commands to be run
+  -x --exec       Really execute the commands, i.e. don't just echo them
+
+EXAMPLE
+  $(basename "$0")    # Dry-run: show commands to be executed
+  $(basename "$0") -x
+EOF
+}
+################################################################################
+
+################################################################################
+#[ $UID -gt 0 ] && print_error_and_exit "You must be root to execute this script (current uid: $UID)"
+[[ "$*" =~ [[:space:]]"-x" ]] && CMD_PREFIX=
+# Check for options
+while [ $# -ge 1 ]; do
+  case $1 in
+  -h | --help)
+    usage
+    exit 0
+    ;;
+  -n | --dry-run) CMD_PREFIX="echo" ;;
+  -x | --exec) CMD_PREFIX= ;;
+  *)
+    OPTS="$*"
+    break
+    ;;
+  esac
+  shift
+done
+
+info "initiating/updating ${KICKSECURE_SECURITY_MISC_DIR}"
+if [ ! -d "${KICKSECURE_SECURITY_MISC_DIR}" ]; then
+  $CMD_PREFIX git clone "${KICKSECURE_SECURITY_MISC_URL}" "${KICKSECURE_SECURITY_MISC_DIR}"
+else
+  $CMD_PREFIX git -C "${KICKSECURE_SECURITY_MISC_DIR}" pull origin
+fi
+
+# symlink interesting sysctl.d configs
+info "setup interesting KickSecure sysctl.d configs"
+if [ ! -h "security-misc.d" ]; then
+  $CMD_PREFIX ln -s "${KICKSECURE_SECURITY_MISC_DIR}/usr/lib/sysctl.d/" "security-misc.d"
+fi
+for f in \
+  "30_security-misc_kexec-disable.conf#security-misc-shared" \
+  "990-security-misc.conf#security-misc-shared"; do
+  dst=$(echo "${f}" | sed 's/\#.*$//' | sed 's/security-misc_//')
+  kicksecure_filename="kicksecure-${dst}"
+  if [ ! -h "${kicksecure_filename}" ]; then
+    $CMD_PREFIX ln -s "security-misc.d/$(basename $f)" "${kicksecure_filename}"
+  fi
+  if [ ! -f "${f}" ]; then
+    info "adapt kicksecure grub config '${kicksecure_filename}' to generate ${f}"
+    filename="${dst}"
+    [ -n "${CMD_PREFIX}" ] && filename="/dev/null"
+    # header
+    cat <<EOF | tee "${filename}"
+#############################################################################################
+# ${dst} - part of sysctl configuration file
+# Adapted from the following resources:
+# - Linux Kernel Self-Protection Project (KSPP): https://kspp.github.io/Recommended_Settings
+# - Kicksecure security-misc: ${KICKSECURE_SECURITY_MISC_URL}
+#
+# Documentation:
+# - https://www.kernel.org/doc/html/latest/admin-guide/sysctl/
+# - https://sysctl-explorer.net/
+#############################################################################################
+#
+EOF
+    $CMD_PREFIX tail -n+4 "${kicksecure_filename}" | tee -a "${filename}"
+  fi
+done
