@@ -68,6 +68,7 @@ mkdir -p ~/devel/kernel && cd ~/devel/kernel
 # ... now clone the repository under cmdline.d
 git clone https://github.com/Falkor/mkcmdline.git cmdline.d
 cd cmdline.d
+make setup
 # You probably wish to create a symlink under /etc/kernel pointing to this working copy
 sudo ln -s $(pwd) /etc/kernel/cmdline.d
 ```
